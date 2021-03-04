@@ -1,0 +1,44 @@
+- name: Destroy cluster before starting again
+  command: kubeadm reset -f
+
+- name: Initialize k8s cluster
+  command: kubeadm init
+  register: kubeadm_init_output
+
+- name: Create file with output
+  copy:
+    content: "{{ kubeadm_init_output.stdout }}"
+    dest: /root/kubeadminit
+
+- name: Prepare kubejoin script
+  shell: tail -2 /root/kubeadminit > /root/kubejoin.sh
+
+- name: Get kubejoin
+  fetch:
+    dest: ./join
+    src: /root/kubejoin.sh
+
+- name: Organize files
+  shell: |
+        cp join/{{ inventory_hostname }}/root/kubejoin.sh join/
+        rm -fr join/{{ inventory_hostname }}
+  delegate_to: localhost
+  become: no
+
+- name: Kubernetes Version
+  shell: kubectl version | base64 | tr -d '\n'
+  register: kubectl_version_output
+
+- name: Install pod network
+  command: kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version={{ kubectl_version_output.stdout }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: wait for pods to come up
+  shell: kubectl get pods -n kube-system -o wide | awk '{ print $3 }' | sed '1d' | uniq
+  retries: 10
+  delay: 5
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: kubectl_get_pods
+  until: kubectl_get_pods.stdout == "Running"

@@ -1,0 +1,7 @@
+
+k8s_packages:
+- apt-transport-https
+- curl
+- kubelet=1.19.6-00
+- kubeadm=1.19.6-00
+- kubectl=1.19.6-00
